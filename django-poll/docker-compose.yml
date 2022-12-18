@@ -6,10 +6,13 @@ services:
     environment:
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
   web:
+    image: ${CI_REGISTRY_IMAGE:-local/django_poll}:${CI_COMMIT_REF_SLUG:-local}
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
-    volumes:
-    - .:/code
+    command: bash -c "
+      python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      gunicorn django_poll.wsgi --workers 2 --bind 0.0.0.0:8000
+      "
     ports:
     - "8000:8000"
     environment:
