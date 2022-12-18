@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres
+    volumes:
+    - postgresql_data:/var/lib/postgresql/data
+    environment:
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+    - .:/code
+    ports:
+    - "8000:8000"
+    environment:
+    - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+    - db
+
+volumes:
+  postgresql_data:
