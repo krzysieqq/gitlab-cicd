@@ -386,7 +386,36 @@ In this section, you prepare project to easy local development.
     django-poll-web-1  | Starting development server at http://0.0.0.0:8000/
     django-poll-web-1  | Quit the server with CONTROL-C.
     ```
-   
+
+### Develop local project
+
+Now you should develop your project. For example, you can write your [first Django app 
+with an official Django tutorial](https://docs.djangoproject.com/en/3.2/intro/tutorial01/).
+Remember that all commands given inside the tutorial you should run inside your container e.g.
+
+If the tutorial says that you should run the command:
+```
+$ python manage.py startapp polls
+```
+You need to go first inside your container and then run this command.
+```
+$ cd django-poll/                                                                                                                                                                                                                                                             
+user@local-pc:~/Workspace/django-cicd/django-poll$ docker compose exec web bash
+root@ae372cbade9b:/code# python manage.py startapp polls
+root@ae372cbade9b:/code# 
+
+```
+
+Remember that all files created inside a container on your local file system will have `root` 
+permissions. This happens because the container runs as the root user. You can change 
+the ownership of the new files using the command below. It will change ownership of all files 
+inside the current directory.
+
+```console
+sudo chown -R $USER:$USER .
+```
+
+
 ## Credits and more documentation:
 * [Docker overview](https://docs.docker.com/get-started/)
 * [Docker Compose overview](https://docs.docker.com/compose/)
