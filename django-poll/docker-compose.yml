@@ -1,20 +1,23 @@
 services:
   db:
     image: postgres
+    restart: unless-stopped
     volumes:
     - postgresql_data:/var/lib/postgresql/data
     environment:
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
   web:
     image: ${CI_REGISTRY_IMAGE:-local/django_poll}:${CI_COMMIT_REF_SLUG:-local}
+    restart: unless-stopped
     build: .
     command: bash -c "
+      ./wait-for-it.sh db:5432 &&
       python manage.py migrate --noinput &&
       python manage.py collectstatic --noinput &&
       gunicorn django_poll.wsgi --workers 2 --bind 0.0.0.0:8000
       "
     ports:
-    - "8000:8000"
+    - "80:8000"
     environment:
     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     depends_on:

@@ -1,7 +1,13 @@
-# Simple Django project with docker, docker-compose and CI/CD using mikr.us  
+# Simple Django project with docker, docker-compose and CI/CD using Mikr.us  
 ## Intro
 This repository was created for the speech at the [PyStok](https://pystok.org/pystok-55/) [#55](https://www.facebook.com/events/486108750034527) event. 
-This guide will demonstrate how to use Docker, Docker-Compose, and Gitlab CI to make your small project Dockerize and deploy to [mikr.us](https://mikr.us/) VPS.
+This guide will demonstrate how to use Docker, Docker-Compose, and Gitlab CI to do your small dockerized project and deploy to [mikr.us](https://mikr.us/?r=eacdde60) VPS.
+
+If you have any problems feel free to create an issue on [GitHub](https://github.com/krzysieqq/gitlab-cicd)
+
+You can also review app at [GitLab](https://gitlab.com/krzysieqq/django-poll/).
+
+You can also [join my Discord](https://discord.gg/wgFKegXFZ5) if you have any questions.
 
 ## Requirements
 Before start make sure that you have installed:
@@ -84,12 +90,14 @@ Before start make sure that you have installed:
     services:
       db:
         image: postgres
+        restart: unless-stopped
         volumes:
         - postgresql_data:/var/lib/postgresql/data
         environment:
         - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       web:
         build: .
+        restart: unless-stopped
         command: python manage.py runserver 0.0.0.0:8000
         volumes:
         - .:/code
@@ -105,10 +113,32 @@ Before start make sure that you have installed:
     ```
 
     This file defines two services: The `db` service and the `web` service.\
-    `db` service will mount `postgresql_data` [volume](https://docs.docker.com/storage/volumes/) to 
+    - `db` service will mount `postgresql_data` [volume](https://docs.docker.com/storage/volumes/) to 
     `/var/lib/postgresql/data` inside docker. Thanks to this, data from the container won't be lost. We also set new
     environment variable: `POSTGRES_PASSWORD` with password to postgres database. `${POSTGRES_PASSWORD:-postgres}` means
     take environment variable `POSTGRES_PASSWORD` or if it doesn't exist set default value to `postgres`.
+    - `web` service defines few more things. 
+      - We set current directory as context (`build: .`) it will be used when we build container using `docker-compose build`
+      - `restart: unless-stopped` restart the container unless stopped f.g. using `docker compose stop`
+      - Entrypoint command that will be used to run container is `python manage.py runserver 0.0.0.0:8000`.
+      - We mount current directory (directory where is `docker-compose.yml` file) inside `/code` folder 
+      in container.
+      ```yaml
+      volumes:
+      - .:/code
+      ```
+      - Next we publish `8000` port outside container. Below code map TCP port 8000 in the container to port 8000 on the Docker host (`<host>:<container>`).
+      ```yaml
+      ports:
+      - "8000:8000"
+      ```
+      - We add new environment variable `POSTGRES_PASSWORD` with default value "postgres".
+      - Our container depends on `db`, so container with database should start first, and then `web` container 
+      will start. 
+      ```yaml
+      depends_on:
+      - db
+      ```
 
 
 ### Create a Django project
@@ -290,11 +320,13 @@ In this section, you prepare project to easy local development.
         command: python manage.py runserver 0.0.0.0:8000
         volumes:
           - .:/code
+        ports:
+          - "8000:8000"
     ```
-    
     This file overrides `web` service by adding custom command `runserver` and mounting
     current directory to `/code` location inside container. Thanks to this operation, you will
-    be able to work with the code inside the container that will be reloaded automatically.
+    be able to work with the code inside the container that will be reloaded automatically. We also
+    map `8000` port from container to host.
 3. Edit a `requirements.txt` in your project directory and add following packages.
    ```python
     # Install Python WSGI HTTP Server for UNIX
@@ -307,13 +339,6 @@ In this section, you prepare project to easy local development.
      web:
        image: ${CI_REGISTRY_IMAGE:-local/django_poll}:${CI_COMMIT_REF_SLUG:-local}
        build: .
-       command: bash -c "
-         python manage.py migrate --noinput &&
-         python manage.py collectstatic --noinput &&
-         gunicorn django_poll.wsgi --workers 2 --bind 0.0.0.0:8000
-         "
-       ports:
-       - "8000:8000"
        environment:
        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
        depends_on:
@@ -321,9 +346,7 @@ In this section, you prepare project to easy local development.
     ```
     We have added image name with default values which help us when we will be calling it in CI/CD.
     We use there [Gitlab Ci Variables](https://docs.gitlab.com/ee/ci/variables/) which are available in pipelines.
-    We also add custom entrypoint command which we will use in the production environment. 
-    Command will make Django migrations, collect static files which will be served by `whitenoise` and
-    run gunicorn wsgi server with our app.
+    Sections that were transferred to the `docker-compose.override.yml` file have been deleted. 
 5. Edit `settings.py` file in your application:
     - Add to `MIDDLEWARE` list `"whitenoise.middleware.WhiteNoiseMiddleware",` at the end. 
     - Add `STATIC_ROOT = '/static/'` as config of root folder contains static files.
@@ -391,29 +414,347 @@ In this section, you prepare project to easy local development.
 
 Now you should develop your project. For example, you can write your [first Django app 
 with an official Django tutorial](https://docs.djangoproject.com/en/3.2/intro/tutorial01/).
-Remember that all commands given inside the tutorial you should run inside your container e.g.
-
+Remember that all commands given inside the tutorial you should run inside your container.\
 If the tutorial says that you should run the command:
 ```
 $ python manage.py startapp polls
 ```
-You need to go first inside your container and then run this command.
+You need to [go first inside your container](https://docs.docker.com/engine/reference/commandline/compose_exec/) and then run this command.
 ```
 $ cd django-poll/                                                                                                                                                                                                                                                             
 user@local-pc:~/Workspace/django-cicd/django-poll$ docker compose exec web bash
 root@ae372cbade9b:/code# python manage.py startapp polls
 root@ae372cbade9b:/code# 
-
 ```
-
+We run this command from place where we create `docker-compose.yml`\ 
 Remember that all files created inside a container on your local file system will have `root` 
 permissions. This happens because the container runs as the root user. You can change 
 the ownership of the new files using the command below. It will change ownership of all files 
 inside the current directory.
 
 ```console
-sudo chown -R $USER:$USER .
+$ sudo chown -R $USER:$USER .
 ```
+
+#### Create home page
+Our app should have simple home page to see if everything works fine.
+1. Go to `settings.py`, search for `TEMPLATES = [...` and add to `['DIRS']` folder with templates: `['templates'],`
+    so it should look like this:
+    ```
+    TEMPLATES = [
+        {
+            'BACKEND': 'django.template.backends.django.DjangoTemplates',
+            'DIRS': ['templates'],
+            'APP_DIRS': True,
+            'OPTIONS': {
+                'context_processors': [
+                    'django.template.context_processors.debug',
+                    'django.template.context_processors.request',
+                    'django.contrib.auth.context_processors.auth',
+                    'django.contrib.messages.context_processors.messages',
+                ],
+            },
+        },
+    ]
+    ```
+2. At root of your project create folder `templates`
+3. Inside folder `templates` create `home.html` file and paste into you simple html site. 
+    In my case content of this file looks:
+    ```html
+    <!doctype html>
+    <html class="no-js" lang="en">
+    
+    <head>
+      <meta charset="utf-8">
+      <title>Pystok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
+      <meta name="description" content="">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    
+    <body>
+      <h1>Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</h1>
+      <p>Hello world!</p>
+      <p>Krzysztof Owsieniuk</p>
+    </body>
+    </html>
+    ```
+4. Open `urls.py` and add before urlpatterns import:
+    ```python
+    from django.views.generic import TemplateView
+    ```
+    and next add to `urlpatterns` path to your homepage so it should look like this:
+    ```python
+    urlpatterns = [
+        path('', TemplateView.as_view(template_name="home.html")),
+        path('admin/', admin.site.urls),
+    ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+    ```
+
+
+### Prepare your server
+
+If your project is ready to deploy, you must prepare your VPS (Virtual Private Server).
+In our case, we will use [MIKR.US](https://mikr.us/?r=eacdde60). We want to run docker inside, so 
+we need to choose *Mikrus 2.1* server or above. After purchasing the service, you will 
+receive auth data to the server on your e-mail address.
+
+1. Login into your VPS through ssh.
+    ```
+    $ ssh root@<your_server>.mikr.us -p 10000
+    ```
+2. We need to install Docker inside. For this purpose, we will use [NOOBS scripts](https://github.com/unkn0w/noobs)
+    preinstalled on the machine. In our case, we will use [*chce_dockera.sh*](https://github.com/unkn0w/noobs/blob/main/scripts/chce_dockera.sh) script, 
+    which will install `Docker`
+    ```
+    $ . /opt/noobs/scripts/chce_dockera.sh
+   
+    [...]
+   
+    Unable to find image 'hello-world:latest' locally
+    latest: Pulling from library/hello-world
+    2db29710123e: Pull complete 
+    Digest: sha256:c77be1d3a47d0caf71a82dd893ee61ce01f32fc758031a6ec4cf1389248bb833
+    Status: Downloaded newer image for hello-world:latest
+    
+    Hello from Docker!
+    This message shows that your installation appears to be working correctly.
+    
+    To generate this message, Docker took the following steps:
+     1. The Docker client contacted the Docker daemon.
+     2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+        (amd64)
+     3. The Docker daemon created a new container from that image which runs the
+        executable that produces the output you are currently reading.
+     4. The Docker daemon streamed that output to the Docker client, which sent it
+        to your terminal.
+    
+    To try something more ambitious, you can run an Ubuntu container with:
+     $ docker run -it ubuntu bash
+    
+    Share images, automate workflows, and more with a free Docker ID:
+     https://hub.docker.com/
+    
+    For more examples and ideas, visit:
+     https://docs.docker.com/get-started/
+    ```
+
+3. Of course, this is a minimal setup, and it is not recommended to use it on the production
+    server. 
+
+### Prepare Gitlab and project for deploy
+After our server has a minimal setup, we need create our gitlab project and create some 
+more local setup. If this is your first time with Gitlab CI, please familiarize yourself with [Gitlab CI Quick Start](https://docs.gitlab.com/ee/ci/quick_start/).
+This section will use [GitLab CI/CD Examples](https://docs.gitlab.com/ee/ci/examples/) and 
+[SSH keys with GitLab CI/CD](https://docs.gitlab.com/ee/ci/ssh_keys/) adapted to our needs.
+
+1. [Create a new SSH key pair locally](https://docs.gitlab.com/ee/user/ssh.html#generate-an-ssh-key-pair) with [ssh-keygen](https://linux.die.net/man/1/ssh-keygen).
+    Run `ssh-keygen -t` followed by the key type and an optional comment. This comment is included in the .pub file that’s created. 
+    You may want to use an email address for the comment. For example, for ED25519:
+    ```bash
+    $ ssh-keygen -t ed25519 -C "<comment>"
+    ```
+    For 2048-bit RSA:
+    ```bash
+    $ ssh-keygen -t rsa -b 2048 -C "<comment>"
+    ```
+    Remember that your generated private key should be stored by default in `~/.ssh/` folder.
+2. Create a new [Gitlab project](https://gitlab.com/projects/new#blank_project)
+![gitlab_create_project.png](assets/images/gitlab_create_project.png)
+3. Add the private key as a [GitLab CI variable](https://docs.gitlab.com/ee/ci/variables/index.html) to your project. 
+    You can do it from `Settings->CI/CD->Variables`. Variable should have name `SSH_PRIVATE_KEY`
+    and store your private key generated at 1 step.
+![add_github_ci_variable.png](assets/images/add_github_ci_variable.png)
+4. You need to add two more variables as above.
+    - `SSH_SERVER` should store your server address 
+    - `SSH_PORT` should store your server port
+5. Minimal Gitlab setup is complete now we need to prepare our project. The first thing we should do 
+    is setup our repository with local project. Because we have existing project if we try clone git inside folder
+    with files it could throw an error: `fatal: destination path '.' already exists and is not an empty directory.`.
+    So we need to do it different way f.g.
+    `git clone git@gitlab.com:<you gitlab repo>.git temp && mv temp/.git . && rm -rf temp`
+    or use one of [other solutions](https://stackoverflow.com/questions/2411031/how-do-i-clone-into-a-non-empty-directory) like init repo and add origin.
+
+6. Create a `.gitlab-ci.yml` file at the repository's root. This file is where you define the CI/CD jobs. Add the following content to the file.
+    ```yaml
+    # Use the official docker image in all stages
+    image: docker:latest
+    
+    # We define two stages
+    stages:
+      - build
+      - deploy
+    
+    # First stage will be responsible for build our project using docker compose command
+    # and push builded images to gitlab repository
+    docker-build:
+      stage: build
+      services:
+        - docker:dind
+      before_script:
+        - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+      script:
+        - docker compose -f docker-compose.yml build
+        - docker compose push
+    
+    # Second stage will deploy our app to server using remote docker host connection.
+    docker-deploy:
+      stage:
+        deploy
+      variables:
+        # Setup temporary stage variable
+        DOCKER_HOST: ssh://root@$SSH_SERVER:$SSH_PORT
+      before_script:
+        # Install ssh-agent if not already installed, it is required by Docker.
+        - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+    
+        # Run ssh-agent (inside the build environment)
+        - eval $(ssh-agent -s)
+    
+        # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
+        # We're using tr to fix line endings which makes ed25519 keys work
+        # without extra base64 encoding.
+        # https://gitlab.com/gitlab-examples/ssh-private-key/issues/1#note_48526556
+        - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    
+        # Create `.ssh` folder if not exists
+        - mkdir -p ~/.ssh
+    
+        # Use ssh-keyscan to scan the keys of your private server.
+        - ssh-keyscan -Hp $SSH_PORT $SSH_SERVER  >> ~/.ssh/known_hosts
+        # Login on remote server to gitlab repository
+        - echo "$CI_REGISTRY_PASSWORD" | docker -H $DOCKER_HOST login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY
+      script:
+        # We pull our image built in `docker-build` stage. The image is downloaded one at a time due to:
+        # https://github.com/docker/compose/issues/9448
+        - docker compose -f docker-compose.yml pull web
+        - docker compose -f docker-compose.yml up -d --remove-orphans
+    ```
+7. Add `wait-for-it.sh` file to project root. You can download content of this file from [here](https://github.com/vishnubob/wait-for-it).
+    This file is a bash script that will wait on the availability of a host and TCP port. You can also use command above to download file.
+
+    ```bash
+    $ wget https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh
+    ```
+    Remember to add execution right for this script using `$ chmod +x wait-for-it.sh`
+
+8. Edit you `docker-compose.yml` file and after `build: .` section add following content:
+
+    ```yaml
+    command: bash -c "
+      ./wait-for-it.sh db:5432 &&
+      python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      gunicorn django_poll.wsgi --workers 2 --bind 0.0.0.0:8000
+      "
+    ports:
+    - "80:8000"
+    ```
+    This will add custom entrypoint command which will run at container startup at you server. The first thing this script does 
+    is wait for database until she will be ready to accept connections. Then we will migrate our
+    migrations, collect static files which will be served by `whitenoise` and run gunicorn wsgi server with our app at `8000` port inside container. We map this port 
+    to `80` port at our server because we will accept connection at this port from internet. This is default port for the HTTP protocol.
+
+9. Edit `settings.py`, turn off debug mode setting `DEBUG = False` and add your domain name to `ALLOWED_HOSTS` list,
+    or you can set it to ALLOWED_HOSTS = ['*'] for development purposes.
+
+10. The last but not least is to create `.dockerignore` at the root of your project.
+    This file tells docker when he is build container which files should ignore and don't add inside image.
+    We should add to this file all files which we won't be able at our server and could be possibly dangerous for us.
+    In my case, this file contains the following content.
+
+    ```
+    *.py[cod]
+    *.mo
+    *.db
+    *.egg-info
+    *.sql*
+    .cache
+    .project
+    .idea
+    .pydevproject
+    .idea/
+    .DS_Store
+    .git/
+    .sass-cache
+    __pycache__
+    dist
+    docs
+    env
+    logs
+    Dockerfile
+    docker-compose*
+    ```
+
+11. Now commit all your changes and push to remote server.
+
+    ```bash
+    $ git add . && git commit -m "Init django poll app" && git push
+    ```
+    After you push your changes at the Gitlab inside `CI/CD->Pipelines` section you should see you running jobs.\
+    ![gitlab_running_pipeline.png](assets/images/gitlab_running_pipeline.png)
+
+    You can track changes which where done at pipeline by click single job name and go inside.\
+    ![gitlab_go_inside_single_job.png](assets/images/gitlab_go_inside_single_job.png)
+
+    You should see a screen like the one below. It describes all things which have been done by the GitLab runner server.\
+    ![gitlab_single_job.png](assets/images/gitlab_single_job.png)
+
+12. If everything works fine, after login to your server through the ssh you and use `curl` on `localhost` you should see same content as your created.  
+    ```bash
+    root@i359:~# curl localhost
+    <!doctype html>
+    <html class="no-js" lang="en">
+    
+    <head>
+      <meta charset="utf-8">
+      <title>Pystok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
+      <meta name="description" content="">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    
+    <body>
+      <h1>Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</h1>
+      <p>Hello world!</p>
+      <p>Krzysztof Owsieniuk</p>
+    </body>
+    ```
+### Configure your domain
+The last step if everything went ok in the previous steps is setup your domain. There are two most common 
+cases we may encounter. The first when you don't have your own domain and the second when you have one. 
+
+#### I don't have domain
+If you don't have your own domain you can configure [free subdomain provided by Mikr.US](https://www.notion.so/Darmowa-subdomena-dla-VPS-6e73137349144646a18cbb51319f09a9). For this you 
+need to go to the [management panel](https://mikr.us/panel/) and go to the tab `Subdomeny`. Next
+name your subdomain and save changes.
+
+![mirkus_subdomain.png](assets/images/mirkus_subdomain.png)
+
+Setup can take about 5 minutes. After this time go to [your subdomain](https://pystok55.bieda.it/) and check if everything works fine!
+
+#### I have my own domain
+There if few different ways to connect your domain with mikrus. We will use [the most recommended](https://www.notion.so/Podpi-cie-domeny-przez-CloudFlare-2a04b845203a4d9b82fa1816c6962d8e) i.e. 
+we will use free [Cloudflare](https://www.cloudflare.com/) for this purpose. So if you don't have 
+cloudflare account create it. Next log in and go to `Websites` and click `+ Add site`.
+Next enter your site at input and click `Add Site`. Next step is to choose a subscription plan. We will
+use free plan so select free option at the bottom and continue. Now you have to change your domain DNS to given by
+Cloudflare. Pointing to Cloudflare’s nameservers is a critical step in activation and must be complete 
+for Cloudflare to optimize and protect your site. Log in to your domain provider, goto DNS settings, and set the server
+to provided by Cloudflare. Save your changes. Registrars can take 24 hours to process nameserver updates. 
+You will receive an email when your site is active on Cloudflare. After your domain setup is complete, go to Cloudflare to
+your domain, next `DNS->Records` and add a new record with `AAAA` type name you choose and your Mirkus IPv6 address, `Proxy 
+status` must be checked.
+You can check your IPv6 Mikrus address by login through the ssh and use command:
+```bash
+ip -6 addr
+```
+or if you don't want to search you [can use this](https://superuser.com/a/1057290):
+```bash
+/sbin/ip -6 addr | grep inet6 | awk -F '[ \t]+|/' '{print $3}' | grep -v ^::1 | grep -v ^fe80
+```
+![cloudflare_add_domain.png](assets/images/cloudflare_add_domain.png)
+
+After save if everything was fine, go to [your subdomain](pystok55.krzysieqq.pl) and enjoy the completed process!
 
 
 ## Credits and more documentation:
