@@ -1,6 +1,6 @@
 # Simple Django project with Docker, docker-compose, and CI/CD using Mikr.us  
 ## Intro
-This repository was created for the speech at the [PyStok](https://pystok.org/pystok-55/) [#55](https://www.facebook.com/events/486108750034527) event. 
+This repository was created for the talk at the [PyStok](https://pystok.org/pystok-55/) [#55](https://www.facebook.com/events/486108750034527) event. 
 This guide will demonstrate how to use Docker, Docker-Compose, and Gitlab CI to do your small dockerized project and deploy to [mikr.us](https://mikr.us/?r=eacdde60) VPS.
 
 If you have any problems feel free to create an issue on [GitHub](https://github.com/krzysieqq/gitlab-cicd)
@@ -30,7 +30,7 @@ Before starting, make sure that you have installed the following:
     mkdir django-poll
     ```
 
-    You can name the directory something easy for you to remember. This directory is the context for your application image. The directory should only contain resources to build that image.
+    You can name the directory on something easy for you to remember. This directory is the context for your application image. The directory should only contain resources to build that image.
 
 2. Go to the root of your project directory.
     ```console
@@ -117,14 +117,14 @@ Before starting, make sure that you have installed the following:
       postgresql_data:
     ```
 
-    This file defines two services: The `db` service and the `web` service.\
+    This file defines two services: The `db` service and the `web` service.
     - `db` service will mount `postgresql_data` [volume](https://docs.docker.com/storage/volumes/) to 
     `/var/lib/postgresql/data` inside Docker. Thanks to this, data from the container won't be lost. We also set the new
     environment variable: `POSTGRES_PASSWORD` with a password to the Postgres database. `${POSTGRES_PASSWORD:-postgres}` means
     take environment variable `POSTGRES_PASSWORD` or if it doesn't exist, set the default value to `postgres`.
     - `web` service defines a few more things. 
       - We set the current directory as context (`build: .`). It will be used when we build a container using `docker compose build`
-      - `restart: unless-stopped` restart the container unless stopped f.g. using `docker compose stop`
+      - `restart: unless-stopped` restart the container unless stopped e.g. using `docker compose stop`
       - Entrypoint command that will be used to run the container is `python manage.py runserver 0.0.0.0:8000`.
       - We mount the current directory (the directory where is `docker-compose.yml` file) inside the`/code` folder 
       in the container.
@@ -422,12 +422,14 @@ user@local-pc:~/Workspace/django-cicd/django-poll$ docker compose exec web bash
 root@ae372cbade9b:/code# python manage.py startapp polls
 root@ae372cbade9b:/code# 
 ```
-We run this command from the place where we create `docker-compose.yml`\ 
+We run this command from the place where we create `docker-compose.yml`
+
+---
 Remember that all files created inside a container on your local file system will have `root` 
 permissions. This happens because the container runs as the root user. You can change 
 the ownership of the new files using the command below. It will change ownership of all files 
 inside the current directory.
-
+---
 ```console
 $ sudo chown -R $USER:$USER .
 ```
@@ -462,7 +464,7 @@ Our app should have a simple home page to see if everything works fine.
     
     <head>
       <meta charset="utf-8">
-      <title>Pystok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
+      <title>PyStok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
       <meta name="description" content="">
       <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
@@ -566,7 +568,7 @@ This section will use [GitLab CI/CD Examples](https://docs.gitlab.com/ee/ci/exam
     - `SSH_PORT` should store your server port
 5. Minimal Gitlab setup is complete. Now we need to prepare our project. First, we should set up our repository with a local project. Because we have an existing project, if we try to clone git inside a folder
     with files, it could throw an error: `fatal: destination path '.' already exists and is not an empty directory.`.
-    So we need to do it differently way f.g.
+    So we need to do it differently way e.g.
     `git clone git@gitlab.com:<you gitlab repo>.git temp && mv temp/.git . && rm -rf temp`
     or use one of [other solutions](https://stackoverflow.com/questions/2411031/how-do-i-clone-into-a-non-empty-directory) like init repo and add origin.
 
@@ -703,7 +705,7 @@ This section will use [GitLab CI/CD Examples](https://docs.gitlab.com/ee/ci/exam
     
     <head>
       <meta charset="utf-8">
-      <title>Pystok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
+      <title>PyStok 55 - Alfabet dewelopera - (A)utomatyczne (B)udowanie (C)iągłe (D)ostarczanie</title>
       <meta name="description" content="">
       <meta name="viewport" content="width=device-width, initial-scale=1">
     </head>
